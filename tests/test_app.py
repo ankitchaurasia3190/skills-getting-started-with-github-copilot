@@ -1,0 +1,44 @@
+import pytest
+from fastapi.testclient import TestClient
+
+import copy
+
+from src.app import app, initial_activities
+
+client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def reset_activities():
+    import copy
+    app.state.activities = copy.deepcopy(initial_activities)
+
+def test_get_activities():
+    response = client.get("/activities")
+    assert response.status_code == 200
+    data = response.json()
+    assert isinstance(data, dict)
+    assert "Chess Club" in data
+
+def test_signup_and_unregister():
+    # Use a unique email for testing
+    test_email = "pytestuser@mergington.edu"
+    activity = "Chess Club"
+
+    # Ensure not already signed up
+    client.post(f"/activities/{activity}/unregister", params={"email": test_email})
+
+    # Sign up
+    response = client.post(f"/activities/{activity}/signup", params={"email": test_email})
+    assert response.status_code == 200
+    assert f"Signed up {test_email}" in response.json()["message"]
+
+    # Unregister
+    response = client.post(f"/activities/{activity}/unregister", params={"email": test_email})
+    assert response.status_code == 200
+    assert f"Removed {test_email}" in response.json()["message"]
+
+    # Unregister again should 404
+    response = client.post(f"/activities/{activity}/unregister", params={"email": test_email})
+    assert response.status_code == 404
+    assert "Participant not found" in response.json()["detail"]

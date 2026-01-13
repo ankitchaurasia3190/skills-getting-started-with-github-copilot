@@ -1,4 +1,5 @@
 
+
 """
 High School Management System API
 
@@ -11,97 +12,65 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
 from pathlib import Path
+import copy
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
 
 # Mount the static files directory
 current_dir = Path(__file__).parent
-
-# ...existing code...
-
-# Unregister endpoint
-@app.post("/activities/{activity_name}/unregister")
-def unregister_from_activity(activity_name: str, email: str):
-    """Remove a student from an activity"""
-    if activity_name not in activities:
-        raise HTTPException(status_code=404, detail="Activity not found")
-    activity = activities[activity_name]
-    if email not in activity["participants"]:
-        raise HTTPException(status_code=404, detail="Participant not found in this activity")
-    activity["participants"].remove(email)
-    return {"message": f"Removed {email} from {activity_name}"}
-"""
-High School Management System API
-
-A super simple FastAPI application that allows students to view and sign up
-for extracurricular activities at Mergington High School.
-"""
-
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import RedirectResponse
-import os
-from pathlib import Path
-
-app = FastAPI(title="Mergington High School API",
-              description="API for viewing and signing up for extracurricular activities")
-
-# Mount the static files directory
-current_dir = Path(__file__).parent
-app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
-          "static")), name="static")
+app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent, "static")), name="static")
 
 # In-memory activity database
-activities = {
+initial_activities = {
     "Chess Club": {
         "description": "Learn strategies and compete in chess tournaments",
         "schedule": "Fridays, 3:30 PM - 5:00 PM",
         "location": "Room 101",
-            "Volleyball": {
-                "description": "Team sport focusing on coordination and strategy",
-                "location": "Gymnasium",
-                "schedule": "Mondays and Wednesdays, 4:00 PM - 5:30 PM",
-                "max_participants": 20,
-                "participants": ["alex@mergington.edu"]
-            },
-            "Basketball": {
-                "description": "Fast-paced team sport building skills and teamwork",
-                "location": "Gymnasium",
-                "schedule": "Tuesdays and Thursdays, 4:00 PM - 5:30 PM",
-                "max_participants": 15,
-                "participants": ["james@mergington.edu"]
-            },
-            "Drama Club": {
-                "description": "Theater performances and acting workshops",
-                "location": "Auditorium",
-                "schedule": "Wednesdays, 3:30 PM - 5:00 PM",
-                "max_participants": 25,
-                "participants": ["isabella@mergington.edu", "noah@mergington.edu"]
-            },
-            "Art Studio": {
-                "description": "Painting, sculpture, and creative art projects",
-                "location": "Art Room 202",
-                "schedule": "Saturdays, 10:00 AM - 12:00 PM",
-                "max_participants": 18,
-                "participants": ["ava@mergington.edu"]
-            },
-            "Debate Team": {
-                "description": "Competitive debate and public speaking skills",
-                "location": "Room 305",
-                "schedule": "Mondays and Thursdays, 3:30 PM - 5:00 PM",
-                "max_participants": 16,
-                "participants": ["lucas@mergington.edu", "mia@mergington.edu"]
-            },
-            "Science Club": {
-                "description": "Hands-on experiments and scientific discovery",
-                "location": "Lab 401",
-                "schedule": "Fridays, 3:30 PM - 5:00 PM",
-                "max_participants": 22,
-                "participants": ["ethan@mergington.edu"]
-            },
         "max_participants": 12,
         "participants": ["michael@mergington.edu", "daniel@mergington.edu"]
+    },
+    "Volleyball": {
+        "description": "Team sport focusing on coordination and strategy",
+        "location": "Gymnasium",
+        "schedule": "Mondays and Wednesdays, 4:00 PM - 5:30 PM",
+        "max_participants": 20,
+        "participants": ["alex@mergington.edu"]
+    },
+    "Basketball": {
+        "description": "Fast-paced team sport building skills and teamwork",
+        "location": "Gymnasium",
+        "schedule": "Tuesdays and Thursdays, 4:00 PM - 5:30 PM",
+        "max_participants": 15,
+        "participants": ["james@mergington.edu"]
+    },
+    "Drama Club": {
+        "description": "Theater performances and acting workshops",
+        "location": "Auditorium",
+        "schedule": "Wednesdays, 3:30 PM - 5:00 PM",
+        "max_participants": 25,
+        "participants": ["isabella@mergington.edu", "noah@mergington.edu"]
+    },
+    "Art Studio": {
+        "description": "Painting, sculpture, and creative art projects",
+        "location": "Art Room 202",
+        "schedule": "Saturdays, 10:00 AM - 12:00 PM",
+        "max_participants": 18,
+        "participants": ["ava@mergington.edu"]
+    },
+    "Debate Team": {
+        "description": "Competitive debate and public speaking skills",
+        "location": "Room 305",
+        "schedule": "Mondays and Thursdays, 3:30 PM - 5:00 PM",
+        "max_participants": 16,
+        "participants": ["lucas@mergington.edu", "mia@mergington.edu"]
+    },
+    "Science Club": {
+        "description": "Hands-on experiments and scientific discovery",
+        "location": "Lab 401",
+        "schedule": "Fridays, 3:30 PM - 5:00 PM",
+        "max_participants": 22,
+        "participants": ["ethan@mergington.edu"]
     },
     "Programming Class": {
         "description": "Learn programming fundamentals and build software projects",
@@ -116,6 +85,48 @@ activities = {
         "participants": ["john@mergington.edu", "olivia@mergington.edu"]
     }
 }
+app.state.activities = copy.deepcopy(initial_activities)
+
+
+@app.get("/")
+def root():
+    return RedirectResponse(url="/static/index.html")
+
+
+@app.get("/activities")
+def get_activities():
+    return app.state.activities
+
+
+@app.post("/activities/{activity_name}/signup")
+def signup_for_activity(activity_name: str, email: str):
+    """Sign up a student for an activity"""
+    activities = app.state.activities
+    # Validate activity exists
+    if activity_name not in activities:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    # Get the specific activity
+    activity = activities[activity_name]
+    # Validate student is not already signed up
+    if email in activity["participants"]:
+        raise HTTPException(status_code=400, detail="Student already signed up for this activity")
+    # Add student
+    activity["participants"].append(email)
+    return {"message": f"Signed up {email} for {activity_name}"}
+
+
+@app.post("/activities/{activity_name}/unregister")
+def unregister_from_activity(activity_name: str, email: str):
+    """Remove a student from an activity"""
+    activities = app.state.activities
+    if activity_name not in activities:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    activity = activities[activity_name]
+    if email not in activity["participants"]:
+        raise HTTPException(status_code=404, detail="Participant not found in this activity")
+    activity["participants"].remove(email)
+    return {"message": f"Removed {email} from {activity_name}"}
 
 
 @app.get("/")
